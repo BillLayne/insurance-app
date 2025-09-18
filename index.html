@@ -1,0 +1,1561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <title>Sign Insurance Application - Bill Layne Insurance</title>
+    
+    <!-- PDF.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <script>
+        if (window['pdfjsLib']) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js";
+        }
+    </script>
+    
+    <!-- pdf-lib for PDF manipulation -->
+    <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    
+    <!-- Signature Pad -->
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #1a5f7a 0%, #457b9d 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        /* Loading Screen */
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        }
+        
+        .loading-screen.hidden {
+            display: none;
+        }
+        
+        .spinner {
+            border: 4px solid rgba(26, 95, 122, 0.2);
+            border-top: 4px solid #1a5f7a;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Header */
+        .header {
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .header-content {
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .logo img {
+            height: 40px;
+            width: auto;
+        }
+        
+        .logo-text {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1a5f7a;
+        }
+        
+        .customer-info {
+            text-align: right;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .customer-name {
+            font-weight: 600;
+            color: #333;
+        }
+        
+        /* Progress Bar */
+        .progress-bar {
+            background: #f8f9fa;
+            padding: 10px 20px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .progress-steps {
+            display: flex;
+            justify-content: space-between;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        
+        .progress-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex: 1;
+            position: relative;
+        }
+        
+        .progress-step:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            top: 15px;
+            left: 50%;
+            width: 100%;
+            height: 2px;
+            background: #ddd;
+            z-index: -1;
+        }
+        
+        .progress-step.completed::after {
+            background: #4CAF50;
+        }
+        
+        .step-circle {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: #ddd;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            color: white;
+            margin-bottom: 5px;
+        }
+        
+        .progress-step.active .step-circle {
+            background: #1a5f7a;
+        }
+        
+        .progress-step.completed .step-circle {
+            background: #4CAF50;
+        }
+        
+        .step-label {
+            font-size: 12px;
+            color: #666;
+        }
+        
+        /* Main Container */
+        .container {
+            max-width: 900px;
+            margin: 20px auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        
+        /* PDF Viewer */
+        .pdf-viewer {
+            padding: 20px;
+            background: #f8f9fa;
+            min-height: 400px;
+        }
+        
+        .pdf-page {
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            position: relative;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .pdf-canvas {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+        
+        /* Signature Boxes Overlay */
+        .signature-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        
+        .signature-box {
+            position: absolute;
+            border: 2px dashed #1a5f7a;
+            background: rgba(26, 95, 122, 0.05);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 60px;
+        }
+        
+        .signature-box:hover {
+            background: rgba(26, 95, 122, 0.1);
+            border-color: #457b9d;
+        }
+        
+        .signature-box.signed {
+            border: 2px solid #4CAF50;
+            background: rgba(76, 175, 80, 0.05);
+        }
+        
+        .signature-box-label {
+            position: absolute;
+            top: -25px;
+            left: 0;
+            font-size: 12px;
+            font-weight: 600;
+            color: #1a5f7a;
+            background: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+        
+        .signature-hint {
+            color: #1a5f7a;
+            font-size: 14px;
+            font-weight: 600;
+            text-align: center;
+        }
+        
+        .signature-box.signed .signature-hint {
+            display: none;
+        }
+        
+        .signature-box[data-type="date"] {
+            border-color: #457b9d;
+        }
+        
+        /* Page Navigation */
+        .page-navigation {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+        }
+        
+        .nav-btn {
+            padding: 10px 20px;
+            border: none;
+            background: #f0f3f7;
+            color: #333;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .nav-btn:hover:not(:disabled) {
+            background: #e0e0e0;
+        }
+        
+        .nav-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .page-indicator {
+            font-weight: 600;
+            color: #1a5f7a;
+        }
+        
+        /* Signature Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            animation: fadeIn 0.3s;
+        }
+        
+        .modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: slideUp 0.3s;
+        }
+        
+        @keyframes slideUp {
+            from {
+                transform: translateY(50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        .modal-header {
+            margin-bottom: 20px;
+        }
+        
+        .modal-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1a5f7a;
+            margin-bottom: 10px;
+        }
+        
+        .signature-pad-container {
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            margin: 20px 0;
+            background: white;
+        }
+        
+        #signaturePad {
+            width: 100%;
+            height: 200px;
+        }
+        
+        .signature-instructions {
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            margin: 10px 0;
+        }
+        
+        /* Consent Section */
+        .consent-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        
+        .consent-title {
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .consent-text {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #555;
+            margin-bottom: 15px;
+        }
+        
+        .consent-checkbox {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        
+        .consent-checkbox input {
+            margin-top: 3px;
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        
+        .consent-checkbox label {
+            font-size: 15px;
+            cursor: pointer;
+        }
+        
+        /* Buttons */
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #1a5f7a 0%, #457b9d 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(26, 95, 122, 0.3);
+        }
+        
+        .btn-primary:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-secondary {
+            background: #f0f3f7;
+            color: #333;
+        }
+        
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+        
+        .btn-danger {
+            background: #f44336;
+            color: white;
+        }
+        
+        .btn-success {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        
+        /* Action Bar */
+        .action-bar {
+            background: white;
+            padding: 20px;
+            border-top: 2px solid #e0e0e0;
+            position: sticky;
+            bottom: 0;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        /* Success Screen */
+        .success-screen {
+            display: none;
+            padding: 40px;
+            text-align: center;
+        }
+        
+        .success-screen.show {
+            display: block;
+        }
+        
+        .success-icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 20px;
+            background: linear-gradient(135deg, #4CAF50 0%, #8BC34A 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: scaleIn 0.5s;
+        }
+        
+        @keyframes scaleIn {
+            from { transform: scale(0); }
+            to { transform: scale(1); }
+        }
+        
+        .success-icon svg {
+            width: 40px;
+            height: 40px;
+            stroke: white;
+            stroke-width: 3;
+        }
+        
+        .success-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .success-message {
+            font-size: 16px;
+            color: #666;
+            margin-bottom: 20px;
+        }
+        
+        .confirmation-details {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: left;
+        }
+        
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .detail-row:last-child {
+            border-bottom: none;
+        }
+        
+        .detail-label {
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .detail-value {
+            color: #666;
+        }
+        
+        /* Mobile Optimization */
+        @media (max-width: 768px) {
+            .container {
+                margin: 0;
+                border-radius: 0;
+            }
+            
+            .header-content {
+                flex-direction: column;
+                align-items: center;
+                text-align: center;
+            }
+            
+            .customer-info {
+                text-align: center;
+                margin-top: 10px;
+            }
+            
+            .progress-steps {
+                max-width: 100%;
+            }
+            
+            .step-label {
+                font-size: 11px;
+            }
+            
+            .pdf-viewer {
+                padding: 10px;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+            }
+            
+            .btn {
+                width: 100%;
+            }
+            
+            .modal-content {
+                width: 95%;
+                padding: 20px;
+            }
+        }
+        
+        /* Error Message */
+        .error-message {
+            background: #ffebee;
+            border: 1px solid #ffcdd2;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px;
+            text-align: center;
+            display: none;
+        }
+        
+        .error-message.show {
+            display: block;
+        }
+        
+        /* Toast Notification */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            display: none;
+            z-index: 2000;
+            animation: slideInUp 0.3s;
+        }
+        
+        .toast.show {
+            display: block;
+        }
+        
+        @keyframes slideInUp {
+            from {
+                transform: translateX(-50%) translateY(100px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(-50%) translateY(0);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div class="loading-screen" id="loadingScreen">
+        <div class="spinner"></div>
+        <h2 style="color: #1a5f7a; margin-bottom: 10px;">Loading Application...</h2>
+        <p style="color: #666;">Please wait while we prepare your document</p>
+    </div>
+    
+    <!-- Header -->
+    <div class="header">
+        <div class="header-content">
+            <div class="logo">
+                <img src="https://i.imgur.com/cBAgeX8.png" alt="Bill Layne Insurance" onerror="this.style.display='none'">
+                <div class="logo-text">Bill Layne Insurance</div>
+            </div>
+            <div class="customer-info">
+                <div class="customer-name" id="customerName">Loading...</div>
+                <div id="customerPhone">-</div>
+            </div>
+        </div>
+        <div class="progress-bar">
+            <div class="progress-steps">
+                <div class="progress-step active" id="step1">
+                    <div class="step-circle">1</div>
+                    <div class="step-label">Review</div>
+                </div>
+                <div class="progress-step" id="step2">
+                    <div class="step-circle">2</div>
+                    <div class="step-label">Sign</div>
+                </div>
+                <div class="progress-step" id="step3">
+                    <div class="step-circle">3</div>
+                    <div class="step-label">Submit</div>
+                </div>
+                <div class="progress-step" id="step4">
+                    <div class="step-circle">✓</div>
+                    <div class="step-label">Complete</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Error Message -->
+        <div class="error-message" id="errorMessage">
+            <h3>⚠️ Unable to Load Application</h3>
+            <p id="errorText">This link may have expired or is invalid.</p>
+        </div>
+        
+        <!-- PDF Viewer -->
+        <div class="pdf-viewer" id="pdfViewer">
+            <div id="pdfPages"></div>
+        </div>
+        
+        <!-- Page Navigation -->
+        <div class="page-navigation" id="pageNav" style="display: none;">
+            <button class="nav-btn" id="prevPage">← Previous</button>
+            <span class="page-indicator" id="pageIndicator">Page 1 of 1</span>
+            <button class="nav-btn" id="nextPage">Next →</button>
+        </div>
+        
+        <!-- Action Bar -->
+        <div class="action-bar" id="actionBar">
+            <div class="action-buttons">
+                <button class="btn btn-secondary" onclick="reviewDocument()">
+                    👁️ Review Document
+                </button>
+                <button class="btn btn-primary" id="startSigningBtn" onclick="startSigning()">
+                    ✍️ Start Signing
+                </button>
+                <button class="btn btn-success" id="submitBtn" style="display: none;" onclick="submitApplication()">
+                    📤 Submit Application
+                </button>
+            </div>
+        </div>
+        
+        <!-- Success Screen -->
+        <div class="success-screen" id="successScreen">
+            <div class="success-icon">
+                <svg viewBox="0 0 24 24" fill="none">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+            </div>
+            <h2 class="success-title">Application Submitted Successfully!</h2>
+            <p class="success-message">Your signed insurance application has been received.</p>
+            
+            <div class="confirmation-details">
+                <div class="detail-row">
+                    <span class="detail-label">Confirmation Number:</span>
+                    <span class="detail-value" id="confirmationNumber">-</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Submitted At:</span>
+                    <span class="detail-value" id="submittedTime">-</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Application Type:</span>
+                    <span class="detail-value" id="applicationType">-</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Status:</span>
+                    <span class="detail-value" style="color: #4CAF50; font-weight: 600;">✓ Complete</span>
+                </div>
+            </div>
+            
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="downloadCopy()">
+                    📄 Download Copy
+                </button>
+                <button class="btn btn-secondary" onclick="window.location.href='https://www.billlayninsurance.com'">
+                    🏠 Visit Website
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Signature Modal -->
+    <div class="modal" id="signatureModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title" id="modalTitle">Add Your Signature</h2>
+                <p style="color: #666;">Draw your signature below</p>
+            </div>
+            
+            <div class="signature-pad-container">
+                <canvas id="signaturePad"></canvas>
+            </div>
+            
+            <div class="signature-instructions">
+                Use your finger or stylus to sign above
+            </div>
+            
+            <div class="consent-section">
+                <div class="consent-title">Electronic Signature Consent</div>
+                <div class="consent-text">
+                    By signing below, I agree that my electronic signature is the legal equivalent of my manual signature on this insurance application. I consent to conduct this transaction electronically.
+                </div>
+                <div class="consent-checkbox">
+                    <input type="checkbox" id="consentCheck">
+                    <label for="consentCheck">I agree to sign this document electronically</label>
+                </div>
+            </div>
+            
+            <div class="btn-group">
+                <button class="btn btn-danger" onclick="clearSignature()">
+                    Clear
+                </button>
+                <button class="btn btn-secondary" onclick="closeModal()">
+                    Cancel
+                </button>
+                <button class="btn btn-primary" id="applySignatureBtn" onclick="applySignature()">
+                    Apply Signature
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast Notification -->
+    <div class="toast" id="toast"></div>
+    
+    <script>
+        // Configuration
+        const GOOGLE_SCRIPT_URL = 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE';
+        
+        // State Management
+        let applicationData = {};
+        let pdfDoc = null;
+        let currentPdfBytes = null;
+        let signatureBoxes = [];
+        let currentPage = 1;
+        let totalPages = 0;
+        let signaturePad = null;
+        let currentSigningBox = null;
+        let allBoxesSigned = false;
+        let currentStep = 1;
+        
+        // Verification data
+        let sessionId = '';
+        let browserFingerprint = '';
+        let ipAddress = '';
+        let confirmationNumber = '';
+        
+        // Initialize Application
+        document.addEventListener('DOMContentLoaded', async function() {
+            try {
+                // Parse URL parameters
+                const urlParams = new URLSearchParams(window.location.search);
+                
+                applicationData = {
+                    id: urlParams.get('id') || generateId(),
+                    name: urlParams.get('name') || '',
+                    phone: urlParams.get('phone') || '',
+                    email: urlParams.get('email') || '',
+                    policy: urlParams.get('policy') || '',
+                    type: urlParams.get('type') || 'general',
+                    pdfUrl: urlParams.get('pdfUrl') || '',
+                    pdfId: urlParams.get('pdfId') || '',
+                    expires: urlParams.get('expires') || '',
+                    config: JSON.parse(atob(urlParams.get('config') || 'e30=')) // Base64 decode
+                };
+                
+                // Check expiration
+                if (applicationData.expires) {
+                    const expirationDate = new Date(applicationData.expires);
+                    if (expirationDate < new Date()) {
+                        throw new Error('This application link has expired.');
+                    }
+                }
+                
+                // Update UI with customer info
+                document.getElementById('customerName').textContent = applicationData.name || 'Customer';
+                document.getElementById('customerPhone').textContent = formatPhone(applicationData.phone) || '';
+                
+                // Generate session data
+                sessionId = generateSessionId();
+                await captureVerificationData();
+                
+                // Load PDF
+                await loadPDF();
+                
+                // Initialize signature pad
+                initializeSignaturePad();
+                
+                // Hide loading screen
+                document.getElementById('loadingScreen').classList.add('hidden');
+                
+                // Set initial step
+                updateProgress(1);
+                
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showError(error.message || 'Unable to load application');
+                document.getElementById('loadingScreen').classList.add('hidden');
+            }
+        });
+        
+        // Load PDF Document
+        async function loadPDF() {
+            try {
+                let pdfData;
+                
+                if (applicationData.pdfUrl) {
+                    // Load from URL
+                    const response = await fetch(applicationData.pdfUrl);
+                    const arrayBuffer = await response.arrayBuffer();
+                    pdfData = new Uint8Array(arrayBuffer);
+                } else if (applicationData.pdfId) {
+                    // Load from localStorage (stored by generator)
+                    const base64 = localStorage.getItem(`pdf_${applicationData.pdfId}`);
+                    if (!base64) {
+                        throw new Error('PDF not found');
+                    }
+                    pdfData = base64ToUint8Array(base64);
+                } else {
+                    // Load default template based on type
+                    pdfData = await loadDefaultTemplate(applicationData.type);
+                }
+                
+                // Store original PDF bytes
+                currentPdfBytes = pdfData;
+                
+                // Load with PDF.js for display
+                const loadingTask = pdfjsLib.getDocument({ data: pdfData });
+                pdfDoc = await loadingTask.promise;
+                totalPages = pdfDoc.numPages;
+                
+                // Render all pages
+                await renderAllPages();
+                
+                // Add signature boxes based on configuration
+                addSignatureBoxes();
+                
+                // Show/hide page navigation
+                if (totalPages > 1) {
+                    document.getElementById('pageNav').style.display = 'flex';
+                    updatePageIndicator();
+                }
+                
+            } catch (error) {
+                console.error('Error loading PDF:', error);
+                throw new Error('Unable to load document');
+            }
+        }
+        
+        // Render all PDF pages
+        async function renderAllPages() {
+            const container = document.getElementById('pdfPages');
+            container.innerHTML = '';
+            
+            for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+                const page = await pdfDoc.getPage(pageNum);
+                const viewport = page.getViewport({ scale: 1.5 });
+                
+                // Create page container
+                const pageDiv = document.createElement('div');
+                pageDiv.className = 'pdf-page';
+                pageDiv.id = `page-${pageNum}`;
+                pageDiv.dataset.pageNumber = pageNum;
+                
+                // Create canvas
+                const canvas = document.createElement('canvas');
+                canvas.className = 'pdf-canvas';
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                
+                // Create overlay for signature boxes
+                const overlay = document.createElement('div');
+                overlay.className = 'signature-overlay';
+                overlay.id = `overlay-${pageNum}`;
+                
+                pageDiv.appendChild(canvas);
+                pageDiv.appendChild(overlay);
+                container.appendChild(pageDiv);
+                
+                // Render page
+                const context = canvas.getContext('2d');
+                await page.render({
+                    canvasContext: context,
+                    viewport: viewport
+                }).promise;
+            }
+        }
+        
+        // Add signature boxes to PDF
+        function addSignatureBoxes() {
+            const config = applicationData.config;
+            
+            if (config.autoPlace || !config.signaturePage) {
+                // Auto-place on last page
+                const lastPage = totalPages;
+                addSignatureBox(lastPage, 10, 70, 'signature', 'Signature');
+                addSignatureBox(lastPage, 60, 70, 'date', 'Date');
+                
+                if (applicationData.type === 'business') {
+                    addSignatureBox(lastPage, 10, 80, 'text', 'Title');
+                    addSignatureBox(lastPage, 60, 80, 'text', 'Company');
+                }
+            } else {
+                // Manual placement based on config
+                addSignatureBox(parseInt(config.signaturePage), 10, 70, 'signature', 'Signature');
+                addSignatureBox(parseInt(config.datePage), 60, 70, 'date', 'Date');
+            }
+        }
+        
+        // Add individual signature box
+        function addSignatureBox(pageNum, xPercent, yPercent, type, label) {
+            const overlay = document.getElementById(`overlay-${pageNum}`);
+            if (!overlay) return;
+            
+            const box = document.createElement('div');
+            box.className = 'signature-box';
+            box.style.left = `${xPercent}%`;
+            box.style.top = `${yPercent}%`;
+            box.style.width = type === 'signature' ? '35%' : '20%';
+            box.style.height = '10%';
+            box.dataset.page = pageNum;
+            box.dataset.type = type;
+            box.dataset.label = label;
+            box.dataset.signed = 'false';
+            
+            const boxLabel = document.createElement('div');
+            boxLabel.className = 'signature-box-label';
+            boxLabel.textContent = label;
+            
+            const hint = document.createElement('div');
+            hint.className = 'signature-hint';
+            hint.textContent = type === 'date' ? 'Click to add date' : 'Click to sign';
+            
+            box.appendChild(boxLabel);
+            box.appendChild(hint);
+            box.onclick = () => clickSignatureBox(box);
+            
+            overlay.appendChild(box);
+            signatureBoxes.push(box);
+        }
+        
+        // Handle signature box click
+        function clickSignatureBox(box) {
+            if (currentStep < 2) {
+                showToast('Please click "Start Signing" first');
+                return;
+            }
+            
+            currentSigningBox = box;
+            const type = box.dataset.type;
+            
+            if (type === 'date') {
+                // Auto-fill date
+                const today = new Date();
+                const dateStr = `${today.getMonth()+1}/${today.getDate()}/${today.getFullYear()}`;
+                box.innerHTML = `<div style="font-weight: 600; color: #333;">${dateStr}</div>`;
+                box.classList.add('signed');
+                box.dataset.signed = 'true';
+                box.dataset.value = dateStr;
+                checkAllSigned();
+                showToast('Date added');
+            } else if (type === 'text') {
+                // Show text input
+                const value = prompt(`Enter ${box.dataset.label}:`);
+                if (value) {
+                    box.innerHTML = `<div style="font-weight: 600; color: #333;">${value}</div>`;
+                    box.classList.add('signed');
+                    box.dataset.signed = 'true';
+                    box.dataset.value = value;
+                    checkAllSigned();
+                }
+            } else {
+                // Show signature modal
+                document.getElementById('modalTitle').textContent = `Add ${box.dataset.label}`;
+                document.getElementById('signatureModal').classList.add('show');
+                if (signaturePad) {
+                    signaturePad.clear();
+                }
+            }
+        }
+        
+        // Initialize signature pad
+        function initializeSignaturePad() {
+            const canvas = document.getElementById('signaturePad');
+            signaturePad = new SignaturePad(canvas, {
+                backgroundColor: 'rgb(255, 255, 255)',
+                penColor: 'rgb(0, 0, 0)'
+            });
+            
+            // Resize canvas
+            function resizeCanvas() {
+                const ratio = Math.max(window.devicePixelRatio || 1, 1);
+                canvas.width = canvas.offsetWidth * ratio;
+                canvas.height = canvas.offsetHeight * ratio;
+                canvas.getContext('2d').scale(ratio, ratio);
+                signaturePad.clear();
+            }
+            
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+        }
+        
+        // Clear signature
+        function clearSignature() {
+            if (signaturePad) {
+                signaturePad.clear();
+            }
+        }
+        
+        // Apply signature to box
+        function applySignature() {
+            if (!signaturePad || signaturePad.isEmpty()) {
+                showToast('Please provide your signature');
+                return;
+            }
+            
+            if (!document.getElementById('consentCheck').checked) {
+                showToast('Please agree to electronic signature');
+                return;
+            }
+            
+            if (currentSigningBox) {
+                const signatureData = signaturePad.toDataURL();
+                const img = document.createElement('img');
+                img.src = signatureData;
+                img.style.width = '90%';
+                img.style.height = '80%';
+                img.style.objectFit = 'contain';
+                
+                currentSigningBox.innerHTML = '';
+                currentSigningBox.appendChild(img);
+                currentSigningBox.classList.add('signed');
+                currentSigningBox.dataset.signed = 'true';
+                currentSigningBox.dataset.value = signatureData;
+                
+                checkAllSigned();
+                closeModal();
+                showToast('Signature applied');
+            }
+        }
+        
+        // Check if all boxes are signed
+        function checkAllSigned() {
+            allBoxesSigned = signatureBoxes.every(box => box.dataset.signed === 'true');
+            
+            if (allBoxesSigned) {
+                document.getElementById('startSigningBtn').style.display = 'none';
+                document.getElementById('submitBtn').style.display = 'inline-flex';
+                updateProgress(3);
+                showToast('All fields completed! Ready to submit.');
+            }
+        }
+        
+        // Progress management
+        function updateProgress(step) {
+            currentStep = step;
+            
+            for (let i = 1; i <= 4; i++) {
+                const stepElement = document.getElementById(`step${i}`);
+                stepElement.classList.remove('active', 'completed');
+                
+                if (i < step) {
+                    stepElement.classList.add('completed');
+                } else if (i === step) {
+                    stepElement.classList.add('active');
+                }
+            }
+        }
+        
+        // Start signing process
+        function startSigning() {
+            updateProgress(2);
+            showToast('Click on the signature boxes to sign');
+            
+            // Scroll to first unsigned box
+            const firstUnsigned = signatureBoxes.find(box => box.dataset.signed === 'false');
+            if (firstUnsigned) {
+                const pageNum = firstUnsigned.dataset.page;
+                document.getElementById(`page-${pageNum}`).scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+        
+        // Review document
+        function reviewDocument() {
+            currentPage = 1;
+            document.getElementById('page-1').scrollIntoView({ behavior: 'smooth' });
+            updatePageIndicator();
+        }
+        
+        // Submit application
+        async function submitApplication() {
+            if (!allBoxesSigned) {
+                showToast('Please complete all signature fields');
+                return;
+            }
+            
+            try {
+                // Show loading
+                document.getElementById('loadingScreen').classList.remove('hidden');
+                document.querySelector('.loading-screen h2').textContent = 'Submitting Application...';
+                
+                // Generate confirmation number
+                confirmationNumber = generateConfirmationNumber();
+                
+                // Build signed PDF with signatures embedded
+                const signedPdfBytes = await buildSignedPdf();
+                
+                // Prepare submission data
+                const submissionData = {
+                    // Application info
+                    applicationId: applicationData.id,
+                    confirmationNumber: confirmationNumber,
+                    
+                    // Customer info
+                    customerName: applicationData.name,
+                    customerPhone: applicationData.phone,
+                    customerEmail: applicationData.email,
+                    policyNumber: applicationData.policy,
+                    applicationType: applicationData.type,
+                    
+                    // Signature data
+                    signatures: signatureBoxes.map(box => ({
+                        type: box.dataset.type,
+                        label: box.dataset.label,
+                        value: box.dataset.value,
+                        page: box.dataset.page
+                    })),
+                    
+                    // Verification data
+                    sessionId: sessionId,
+                    browserFingerprint: browserFingerprint,
+                    ipAddress: ipAddress,
+                    deviceInfo: getDeviceInfo(),
+                    userAgent: navigator.userAgent,
+                    screenResolution: `${screen.width}x${screen.height}`,
+                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    
+                    // Timestamps
+                    submittedAt: new Date().toISOString(),
+                    signedAt: new Date().toLocaleString(),
+                    
+                    // PDF data (base64)
+                    signedPdf: arrayBufferToBase64(signedPdfBytes),
+                    
+                    // Agency info
+                    agencyName: 'Bill Layne Insurance Agency',
+                    agencyEmail: 'Save@BillLayneInsurance.com',
+                    agencyPhone: '336-835-1993'
+                };
+                
+                // Submit to Google Sheets
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(submissionData)
+                });
+                
+                // Store signed PDF for download
+                localStorage.setItem(`signed_${confirmationNumber}`, arrayBufferToBase64(signedPdfBytes));
+                
+                // Update tracking in generator
+                updateApplicationStatus(applicationData.id, 'signed');
+                
+                // Show success screen
+                showSuccessScreen();
+                
+            } catch (error) {
+                console.error('Submission error:', error);
+                showToast('Error submitting application. Please try again.');
+            } finally {
+                document.getElementById('loadingScreen').classList.add('hidden');
+            }
+        }
+        
+        // Build signed PDF with embedded signatures
+        async function buildSignedPdf() {
+            // Load PDF with pdf-lib
+            const pdfDoc = await PDFLib.PDFDocument.load(currentPdfBytes);
+            
+            // Embed fonts
+            const helveticaFont = await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica);
+            
+            // Process each signature box
+            for (const box of signatureBoxes) {
+                const pageNum = parseInt(box.dataset.page) - 1;
+                const page = pdfDoc.getPages()[pageNum];
+                const { width, height } = page.getSize();
+                
+                // Calculate position (convert from percentage)
+                const x = (parseFloat(box.style.left) / 100) * width;
+                const y = height - ((parseFloat(box.style.top) + parseFloat(box.style.height)) / 100) * height;
+                
+                if (box.dataset.type === 'signature' && box.dataset.value) {
+                    // Embed signature image
+                    const signatureData = box.dataset.value.split(',')[1];
+                    const signatureBytes = Uint8Array.from(atob(signatureData), c => c.charCodeAt(0));
+                    const signatureImage = await pdfDoc.embedPng(signatureBytes);
+                    
+                    // Draw signature
+                    page.drawImage(signatureImage, {
+                        x: x + 10,
+                        y: y + 10,
+                        width: (parseFloat(box.style.width) / 100) * width - 20,
+                        height: (parseFloat(box.style.height) / 100) * height - 20
+                    });
+                } else if (box.dataset.value) {
+                    // Draw text (date, text fields)
+                    page.drawText(box.dataset.value, {
+                        x: x + 10,
+                        y: y + 20,
+                        size: 12,
+                        font: helveticaFont,
+                        color: PDFLib.rgb(0, 0, 0)
+                    });
+                }
+            }
+            
+            // Add footer with confirmation
+            const pages = pdfDoc.getPages();
+            const footerText = `Electronically signed - Confirmation: ${confirmationNumber} - ${new Date().toLocaleString()}`;
+            
+            for (const page of pages) {
+                const { width } = page.getSize();
+                page.drawText(footerText, {
+                    x: 50,
+                    y: 10,
+                    size: 8,
+                    font: helveticaFont,
+                    color: PDFLib.rgb(0.5, 0.5, 0.5)
+                });
+            }
+            
+            // Set metadata
+            pdfDoc.setTitle(`Insurance Application - ${applicationData.name}`);
+            pdfDoc.setAuthor(applicationData.name);
+            pdfDoc.setSubject(`${applicationData.type} Insurance Application`);
+            pdfDoc.setCreationDate(new Date());
+            pdfDoc.setModificationDate(new Date());
+            
+            return await pdfDoc.save();
+        }
+        
+        // Show success screen
+        function showSuccessScreen() {
+            // Hide other elements
+            document.getElementById('pdfViewer').style.display = 'none';
+            document.getElementById('pageNav').style.display = 'none';
+            document.getElementById('actionBar').style.display = 'none';
+            
+            // Update success details
+            document.getElementById('confirmationNumber').textContent = confirmationNumber;
+            document.getElementById('submittedTime').textContent = new Date().toLocaleString();
+            document.getElementById('applicationType').textContent = 
+                applicationData.type.charAt(0).toUpperCase() + applicationData.type.slice(1) + ' Insurance';
+            
+            // Show success screen
+            document.getElementById('successScreen').classList.add('show');
+            
+            // Update progress
+            updateProgress(4);
+        }
+        
+        // Download signed copy
+        function downloadCopy() {
+            const base64 = localStorage.getItem(`signed_${confirmationNumber}`);
+            if (base64) {
+                const bytes = base64ToUint8Array(base64);
+                const blob = new Blob([bytes], { type: 'application/pdf' });
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `insurance_application_${confirmationNumber}.pdf`;
+                a.click();
+                
+                URL.revokeObjectURL(url);
+                showToast('Download started');
+            }
+        }
+        
+        // Capture verification data
+        async function captureVerificationData() {
+            // Generate browser fingerprint
+            browserFingerprint = generateBrowserFingerprint();
+            
+            // Get IP address
+            try {
+                const response = await fetch('https://api.ipify.org?format=json');
+                const data = await response.json();
+                ipAddress = data.ip;
+            } catch (error) {
+                ipAddress = 'Unable to capture';
+            }
+        }
+        
+        // Generate browser fingerprint
+        function generateBrowserFingerprint() {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.textBaseline = 'top';
+            ctx.font = '14px Arial';
+            ctx.fillText('fingerprint', 2, 2);
+            
+            let fingerprint = canvas.toDataURL();
+            fingerprint = fingerprint.substring(0, 50).replace(/[^a-zA-Z0-9]/g, '');
+            
+            const screenData = `${screen.width}x${screen.height}x${screen.colorDepth}`;
+            const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            
+            return `FP-${fingerprint}-${screenData.replace(/[^0-9]/g, '')}`;
+        }
+        
+        // Get device information
+        function getDeviceInfo() {
+            const userAgent = navigator.userAgent;
+            let deviceType = 'Desktop';
+            
+            if (/Mobile|Android|iPhone|iPad/i.test(userAgent)) {
+                deviceType = /iPad/i.test(userAgent) ? 'Tablet' : 'Mobile';
+            }
+            
+            return deviceType;
+        }
+        
+        // Generate session ID
+        function generateSessionId() {
+            return `SESSION-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        }
+        
+        // Generate confirmation number
+        function generateConfirmationNumber() {
+            const date = new Date();
+            const year = date.getFullYear();
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const day = date.getDate().toString().padStart(2, '0');
+            const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+            return `BLI-${year}${month}${day}-${random}`;
+        }
+        
+        // Generate ID
+        function generateId() {
+            return `APP-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+        }
+        
+        // Update application status in tracking
+        function updateApplicationStatus(appId, status) {
+            let links = JSON.parse(localStorage.getItem('generatedLinks') || '[]');
+            const linkIndex = links.findIndex(l => l.id === appId);
+            
+            if (linkIndex !== -1) {
+                links[linkIndex].status = status;
+                links[linkIndex].signedAt = new Date().toISOString();
+                links[linkIndex].confirmationNumber = confirmationNumber;
+                localStorage.setItem('generatedLinks', JSON.stringify(links));
+            }
+        }
+        
+        // Page navigation
+        document.getElementById('prevPage').addEventListener('click', () => {
+            if (currentPage > 1) {
+                currentPage--;
+                document.getElementById(`page-${currentPage}`).scrollIntoView({ behavior: 'smooth' });
+                updatePageIndicator();
+            }
+        });
+        
+        document.getElementById('nextPage').addEventListener('click', () => {
+            if (currentPage < totalPages) {
+                currentPage++;
+                document.getElementById(`page-${currentPage}`).scrollIntoView({ behavior: 'smooth' });
+                updatePageIndicator();
+            }
+        });
+        
+        function updatePageIndicator() {
+            document.getElementById('pageIndicator').textContent = `Page ${currentPage} of ${totalPages}`;
+            document.getElementById('prevPage').disabled = currentPage === 1;
+            document.getElementById('nextPage').disabled = currentPage === totalPages;
+        }
+        
+        // Modal functions
+        function closeModal() {
+            document.getElementById('signatureModal').classList.remove('show');
+            currentSigningBox = null;
+            if (signaturePad) {
+                signaturePad.clear();
+            }
+            document.getElementById('consentCheck').checked = false;
+        }
+        
+        // Close modal on outside click
+        document.getElementById('signatureModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
+        
+        // Show error
+        function showError(message) {
+            document.getElementById('errorText').textContent = message;
+            document.getElementById('errorMessage').classList.add('show');
+            document.getElementById('pdfViewer').style.display = 'none';
+            document.getElementById('actionBar').style.display = 'none';
+        }
+        
+        // Show toast
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+        
+        // Utility functions
+        function formatPhone(phone) {
+            if (!phone) return '';
+            const cleaned = phone.replace(/\D/g, '');
+            const match = cleaned.match(/^(\d{3})(\d{3})(\d{4})$/);
+            if (match) {
+                return '(' + match[1] + ') ' + match[2] + '-' + match[3];
+            }
+            return phone;
+        }
+        
+        function base64ToUint8Array(base64) {
+            const binaryString = atob(base64);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            return bytes;
+        }
+        
+        function arrayBufferToBase64(buffer) {
+            let binary = '';
+            const bytes = new Uint8Array(buffer);
+            const len = bytes.byteLength;
+            for (let i = 0; i < len; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return btoa(binary);
+        }
+        
+        // Load default template (fallback)
+        async function loadDefaultTemplate(type) {
+            // This would normally load a template PDF from your server
+            // For now, return empty PDF data
+            showToast('Using default template');
+            // You would implement actual template loading here
+            return new Uint8Array();
+        }
+    </script>
+</body>
+</html>
